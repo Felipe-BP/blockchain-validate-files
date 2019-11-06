@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 
@@ -11,21 +11,12 @@ export class AppService {
 
 	hashOfFiles(files): Promise<string[]> {
 		let hashArrayPromise: Promise<string>[] = [];
-		for (let file of files) {
-			const stream = fs.createReadStream('./' + file.path); // to read file
-			const hash = crypto.createHash('sha256'); // set the algorithm to create hash
-			hash.setEncoding('hex'); // enconding to hexadecimal
-
-			// write the file to the hash object
-			stream.pipe(hash);
-
-			// event dispatched when end read file stream
-			hashArrayPromise.push(
-				new Promise((resolve, reject) => {
-					stream.on('end', () => resolve(hash.read()));
-					stream.on('error', reject);
-				})
-			);
+		if (files.length) {
+			for (let file of files) {
+				this.createHash(file, hashArrayPromise);
+			}
+		} else {
+			this.createHash(files, hashArrayPromise);
 		}
 		return Promise.all(hashArrayPromise);
 	}
@@ -40,4 +31,24 @@ export class AppService {
 		});
 	}
 
+	validateBlock(hash: string, numberBlock: number) {
+		const data = fs.readFileSync(`${this.dir}/${numberBlock}`, { encoding: 'utf8' }).trim().split('\r\n');
+		const result = data.find((value, index) => value === hash);
+
+		if (!result)
+			throw new UnauthorizedException('Arquivo Inválido');
+	}
+
+	createHash(file: any, hashArrayPromise: Promise<string>[]) {
+		const stream = fs.createReadStream('./' + file.path); // to read file
+		const hash = crypto.createHash('sha256'); // set the algorithm to create hash
+		hash.setEncoding('hex'); // enconding to hexadecimal
+		// write the file to the hash object
+		stream.pipe(hash);
+		// event dispatched when end read file stream
+		hashArrayPromise.push(new Promise((resolve, reject) => {
+			stream.on('end', () => resolve(hash.read()));
+			stream.on('error', reject);
+		}));
+	}
 }
